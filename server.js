@@ -627,6 +627,14 @@ app.delete('/api/admin/settings/logo', authenticateToken, async (req, res) => {
 });
 
 
+// Redirect /admin and /admin/ to login page
+app.get('/admin', (req, res) => {
+  res.redirect('/admin/login.html');
+});
+app.get('/admin/', (req, res) => {
+  res.redirect('/admin/login.html');
+});
+
 // Catch-all for html pages inside admin or public, so we redirect cleanly or serve them
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
