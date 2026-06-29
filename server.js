@@ -40,16 +40,8 @@ pool.query('SELECT 1')
   .then(() => console.log('Database pool initialized successfully.'))
   .catch(err => console.error('Database pool initialization failed:', err));
 
-// Multer Storage Configuration for Logo uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `logo_${Date.now()}${ext}`);
-  }
-});
+// Multer Storage Configuration for Logo uploads (Using Memory Storage for Serverless environments)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
@@ -306,7 +298,7 @@ app.get('/api/admin/dashboard-stats', authenticateToken, async (req, res) => {
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
       ${dateFilter}
-      GROUP BY sc.id, sc.name
+      GROUP BY sc.id, sc.name, sc.sort_order
       ORDER BY sc.sort_order ASC
     `, params);
     const categoryScores = categoryScoresResult.rows;
@@ -346,7 +338,7 @@ app.get('/api/admin/charts', authenticateToken, async (req, res) => {
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
       ${dateFilter}
-      GROUP BY sc.id, sc.name
+      GROUP BY sc.id, sc.name, sc.sort_order
       ORDER BY sc.sort_order ASC
     `, params);
     const categoryData = catResult.rows;
@@ -359,7 +351,7 @@ app.get('/api/admin/charts', authenticateToken, async (req, res) => {
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
       ${dateFilter}
-      GROUP BY sq.id, sq.question_text, sc.name
+      GROUP BY sq.id, sq.question_text, sc.name, sc.sort_order, sq.sort_order
       ORDER BY sc.sort_order ASC, sq.sort_order ASC
     `, params);
     const questionData = qResult.rows;
@@ -580,29 +572,18 @@ app.post('/api/admin/settings/logo', authenticateToken, upload.single('logo'), a
   }
 
   try {
-    // Get existing logo path to delete old file
-    const { rows } = await pool.query('SELECT setting_value FROM settings WHERE setting_key = $1', ['logo_path']);
-    if (rows.length > 0 && rows[0].setting_value) {
-      const oldLogoPath = path.join(__dirname, 'public', rows[0].setting_value);
-      if (fs.existsSync(oldLogoPath)) {
-        try {
-          fs.unlinkSync(oldLogoPath);
-          console.log(`Deleted old logo file: ${oldLogoPath}`);
-        } catch (unlinkErr) {
-          console.error('Error deleting old logo file:', unlinkErr);
-        }
-      }
-    }
+    // Generate Base64 Data URI
+    const base64Data = req.file.buffer.toString('base64');
+    const logoDataUri = `data:${req.file.mimetype};base64,${base64Data}`;
 
-    // Save the new logo path
-    const relativePath = `/uploads/${req.file.filename}`;
+    // Save the Base64 string directly in settings table
     await pool.query(
       `INSERT INTO settings (setting_key, setting_value) VALUES ($1, $2) 
        ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
-      ['logo_path', relativePath]
+      ['logo_path', logoDataUri]
     );
 
-    res.json({ success: true, logo_path: relativePath });
+    res.json({ success: true, logo_path: logoDataUri });
   } catch (error) {
     console.error('Error saving uploaded logo:', error);
     res.status(500).json({ error: 'Internal server error during logo saving' });
@@ -612,13 +593,6 @@ app.post('/api/admin/settings/logo', authenticateToken, upload.single('logo'), a
 // Delete logo (reset branding)
 app.delete('/api/admin/settings/logo', authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT setting_value FROM settings WHERE setting_key = $1', ['logo_path']);
-    if (rows.length > 0 && rows[0].setting_value) {
-      const oldLogoPath = path.join(__dirname, 'public', rows[0].setting_value);
-      if (fs.existsSync(oldLogoPath)) {
-        fs.unlinkSync(oldLogoPath);
-      }
-    }
     await pool.query('UPDATE settings SET setting_value = $1 WHERE setting_key = $2', ['', 'logo_path']);
     res.json({ success: true, message: 'Logo reset successfully' });
   } catch (error) {
