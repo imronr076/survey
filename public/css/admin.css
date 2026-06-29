@@ -107,6 +107,7 @@ body.admin-body::before {
   flex: 1;
   padding: 2rem;
   min-width: 0; /* Prevent flex breaking on tables */
+  max-width: 100% !important; /* Override global main max-width from style.css */
 }
 
 .dashboard-header {
@@ -506,6 +507,7 @@ body.admin-body::before {
   display: inline-block;
   width: 50px;
   height: 26px;
+  flex-shrink: 0; /* Prevent flexbox shrinking */
 }
 
 .switch input {
@@ -553,7 +555,7 @@ input:checked + .slider-toggle:before {
 .switch-label-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 16px; /* Enhanced spacing */
 }
 
 /* Mobile responsive hamburger and controls */
