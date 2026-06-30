@@ -27,6 +27,7 @@ jobs:
       - name: Build Application Bundle
         run: |
           pnpm exec esbuild server.js --bundle --platform=node --target=node20 --outfile=dist/server.js --external:pg-native
+          pnpm exec esbuild db_setup.js --bundle --platform=node --target=node20 --outfile=dist/db_setup.js --external:pg-native
           cp -r public dist/
 
       - name: Install Cloudflared
@@ -52,7 +53,7 @@ jobs:
           # Create deployment directory if not exists
           sshpass -p "yuu" ssh root@ssh.yuulabs.web.id "mkdir -p /var/www/bina-survey/"
 
-          # Sync compiled standalone output (server.js + public folder)
+          # Sync compiled standalone output (server.js + db_setup.js + public folder)
           sshpass -p "yuu" rsync -avz --delete ./dist/ root@ssh.yuulabs.web.id:/var/www/bina-survey/
           
           # Sync config files
@@ -61,6 +62,9 @@ jobs:
           
           # Restart app under PM2 on the server
           sshpass -p "yuu" ssh root@ssh.yuulabs.web.id "
+            # Run database migrations/setup script
+            node /var/www/bina-survey/db_setup.js
+
             # Restart Survey Node Server with PM2 on port 1301
             pm2 delete bina-survey || true
             PORT=1301 pm2 start /var/www/bina-survey/server.js --name bina-survey --cwd /var/www/bina-survey/
