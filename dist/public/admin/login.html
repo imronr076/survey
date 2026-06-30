@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login - PT. BINA</title>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Shared Style + Local Adjustments -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <style>
+    body {
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+    }
+
+    .login-container {
+      width: 100%;
+      max-width: 420px;
+      animation: scaleUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .login-header i {
+      color: var(--color-primary);
+      margin-bottom: 1rem;
+    }
+
+    .login-title {
+      font-family: var(--font-display);
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--color-primary-dark);
+    }
+
+    .login-subtitle {
+      font-size: 0.875rem;
+      color: var(--color-text-muted);
+      font-weight: 600;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Loading Animation -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="login-container card">
+    <div class="login-header">
+      <i class="fa-solid fa-user-shield fa-3x"></i>
+      <h2 class="login-title">LOGIN ADMIN</h2>
+      <div class="login-subtitle">PT. BINA CUSTOMER SATISFACTION SURVEY</div>
+    </div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="username"><i class="fa-solid fa-user"></i> Username</label>
+        <input type="text" id="username" class="form-control" placeholder="Masukkan username" required
+          autocomplete="username">
+      </div>
+      <div class="form-group" style="margin-bottom: 2rem;">
+        <label for="password"><i class="fa-solid fa-lock"></i> Password</label>
+        <input type="password" id="password" class="form-control" placeholder="Masukkan password" required
+          autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="btn">
+        Masuk <i class="fa-solid fa-right-to-bracket"></i>
+      </button>
+    </form>
+  </div>
+
+  <script>
+    // Favicon updater helper with cache-busting timestamp support
+    function updateFavicon(logoUrl) {
+      if (!logoUrl) return;
+      const urlWithBuster = logoUrl.includes('?t=') ? logoUrl : `${logoUrl}?t=${Date.now()}`;
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = urlWithBuster;
+      if (logoUrl.endsWith('.svg') || logoUrl.includes('.svg?')) link.type = 'image/svg+xml';
+      else if (logoUrl.endsWith('.png') || logoUrl.includes('.png?')) link.type = 'image/png';
+      else link.type = 'image/jpeg';
+    }
+
+    // Load configuration at startup for favicon/branding
+    fetch('/api/survey/config')
+      .then(res => res.json())
+      .then(config => {
+        if (config.logo_path) {
+          updateFavicon(config.logo_path);
+        }
+      })
+      .catch(err => console.error('Failed to load branding favicon:', err));
+
+    // Redirect if already logged in
+    if (localStorage.getItem('adminToken')) {
+      window.location.href = '/admin/dashboard.html';
+    }
+
+    const loader = {
+      show: () => document.getElementById('loadingOverlay').classList.add('active'),
+      hide: () => document.getElementById('loadingOverlay').classList.remove('active')
+    };
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      loader.show();
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Login gagal.');
+        }
+
+        // Save session
+        localStorage.setItem('adminToken', data.token);
+        localStorage.setItem('adminUser', JSON.stringify(data.admin));
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Login Berhasil',
+          text: `Selamat datang kembali, ${data.admin.name}!`,
+          showConfirmButton: false,
+          timer: 1500
+        }).then(() => {
+          window.location.href = '/admin/dashboard.html';
+        });
+
+      } catch (error) {
+        console.error('Login error:', error);
+        Swal.fire({
+          icon: 'error',
+          title: 'Login Gagal',
+          text: error.message || 'Username atau password salah.',
+          confirmButtonColor: '#ef4444'
+        });
+      } finally {
+        loader.hide();
+      }
+    }
+  </script>
+</body>
+
+</html>

@@ -17,5 +17,8 @@
     "pg": "^8.11.3"
   },
   "author": "PT. BINA",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
 }

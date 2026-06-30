@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Dashboard - PT. BINA</title>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- SheetJS (Excel Export) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+  <!-- html2pdf.js (PDF Export) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Cropper.js (Frontend Image Cropping) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Admin CSS -->
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+
+<body class="admin-body">
+
+  <!-- Loading Animation -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Mobile Header -->
+  <div class="mobile-header">
+    <button class="menu-toggle-btn" onclick="toggleSidebar()">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+    <div class="sidebar-brand">PT. BINA</div>
+    <div style="width: 24px;"></div> <!-- spacer -->
+  </div>
+
+  <!-- Sidebar Sidebar -->
+  <aside id="adminSidebar" class="sidebar">
+    <div class="sidebar-header">
+      <i class="fa-solid fa-square-poll-vertical fa-2x"></i>
+      <span class="sidebar-brand">BINA ADMIN</span>
+    </div>
+
+    <ul class="sidebar-menu">
+      <li class="menu-item active" id="tab-menu-dashboard">
+        <a href="#" onclick="switchTab('dashboard')">
+          <i class="fa-solid fa-chart-line"></i>
+          <span>Ringkasan Dashboard</span>
+        </a>
+      </li>
+      <li class="menu-item" id="tab-menu-categories">
+        <a href="#" onclick="switchTab('categories')">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>Kategori Survey</span>
+        </a>
+      </li>
+      <li class="menu-item" id="tab-menu-questions">
+        <a href="#" onclick="switchTab('questions')">
+          <i class="fa-solid fa-circle-question"></i>
+          <span>Pertanyaan Survey</span>
+        </a>
+      </li>
+      <li class="menu-item" id="tab-menu-settings">
+        <a href="#" onclick="switchTab('settings')">
+          <i class="fa-solid fa-sliders"></i>
+          <span>Pengaturan Sistem</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div>
+        <i class="fa-solid fa-user-circle"></i> <span id="adminNameDisplay">Admin</span>
+      </div>
+      <button class="logout-btn" onclick="handleLogout()" title="Keluar">
+        <i class="fa-solid fa-right-from-bracket"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main Panel -->
+  <main class="dashboard-main">
+
+    <!-- TAB 1: DASHBOARD OVERVIEW -->
+    <section id="tab-dashboard" class="tab-content active">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>Ringkasan Dashboard</h2>
+          <p>Informasi hasil survey kepuasan pelanggan PT. BINA</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <a href="/" target="_blank" class="btn btn-secondary"
+            style="width: auto; padding: 0.5rem 1rem; font-size: 0.85rem;">
+            <i class="fa-solid fa-paper-plane"></i> Buka Survey Publik
+          </a>
+        </div>
+      </div>
+
+      <!-- Filters Panel -->
+      <div class="filters-panel">
+        <div class="filter-group">
+          <label for="filterStartDate">Tanggal Mulai</label>
+          <input type="date" id="filterStartDate" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label for="filterEndDate">Tanggal Selesai</label>
+          <input type="date" id="filterEndDate" class="filter-input">
+        </div>
+        <div class="filter-group">
+          <label style="visibility: hidden;">Filter</label>
+          <button type="button" class="btn btn-filter" onclick="applyFilters()">
+            <i class="fa-solid fa-filter"></i> Saring
+          </button>
+        </div>
+        <div class="filter-actions">
+          <button type="button" class="btn btn-filter btn-secondary" onclick="exportExcel()">
+            <i class="fa-solid fa-file-excel" style="color: #10b981;"></i> Ekspor Excel
+          </button>
+          <button type="button" class="btn btn-filter btn-secondary" onclick="exportPDF()">
+            <i class="fa-solid fa-file-pdf" style="color: #ef4444;"></i> Cetak Laporan PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon primary">
+            <i class="fa-solid fa-users"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Total Responden</span>
+            <span class="stat-value" id="statTotalRespondents">0</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon success">
+            <i class="fa-solid fa-percent"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Rata-rata Persentase</span>
+            <span class="stat-value" id="statAveragePercentage">0%</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon warning">
+            <i class="fa-solid fa-face-smile"></i>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Skor Kepuasan</span>
+            <span class="stat-value" id="statSatisfactionIndex">0 / 5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PDF Exportable Wrapper (Dashboard Report Layout) -->
+      <div id="pdfReportContent">
+        <!-- PDF Only Brand Banner (Hidden on screen, shown in print/PDF) -->
+        <div id="pdfHeaderBrand"
+          style="display: none; border-bottom: 2px solid #0f4c81; padding-bottom: 1rem; margin-bottom: 2rem;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <h1 style="color: #0f4c81; font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800;">PT.
+                BINA</h1>
+              <p style="font-size: 0.8rem; color: #64748b; font-weight: 700;">LAPORAN HASIL CUSTOMER SATISFACTION SURVEY
+                (CSS)</p>
+            </div>
+            <div id="pdfHeaderLogoContainer"></div>
+          </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <div class="chart-card">
+            <div class="chart-card-header">Grafik Nilai Rata-Rata per Kategori</div>
+            <div class="chart-container">
+              <canvas id="chartCategory"></canvas>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <div class="chart-card-header">Grafik Nilai per Pertanyaan</div>
+            <div class="chart-container">
+              <canvas id="chartQuestion"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Respondents Table Card -->
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3 class="table-card-title">Daftar Tanggapan Responden</h3>
+          <span style="font-size: 0.85rem; color: var(--color-text-muted);" id="respondentsCountLabel">Menampilkan 0
+            data</span>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table" id="tableRespondents">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Nama</th>
+                <th>Departemen</th>
+                <th>Total Skor</th>
+                <th>Persentase</th>
+                <th>Predikat</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Filled dynamically by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: MANAGE CATEGORIES -->
+    <section id="tab-categories" class="tab-content">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>Kategori Survey</h2>
+          <p>Kelola kategori untuk pengelompokan pertanyaan survey</p>
+        </div>
+        <button type="button" class="btn" style="width: auto;" onclick="openCategoryModal()">
+          <i class="fa-solid fa-plus"></i> Tambah Kategori
+        </button>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3 class="table-card-title">Daftar Kategori</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table" id="tableCategories">
+            <thead>
+              <tr>
+                <th>Urutan</th>
+                <th>Kategori</th>
+                <th>Keterangan</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: MANAGE QUESTIONS -->
+    <section id="tab-questions" class="tab-content">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>Pertanyaan Survey</h2>
+          <p>Tambah, edit, hapus, reorder, atau aktif/nonaktifkan pertanyaan</p>
+        </div>
+        <button type="button" class="btn" style="width: auto;" onclick="openQuestionModal()">
+          <i class="fa-solid fa-plus"></i> Tambah Pertanyaan
+        </button>
+      </div>
+
+      <div class="table-card">
+        <div class="table-card-header">
+          <h3 class="table-card-title">Daftar Pertanyaan</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="custom-table" id="tableQuestions">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Urutan</th>
+                <th>Pertanyaan</th>
+                <th>Tipe</th>
+                <th>Bobot</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: SYSTEM SETTINGS -->
+    <section id="tab-settings" class="tab-content">
+      <div class="dashboard-header">
+        <div class="dashboard-title">
+          <h2>Pengaturan Sistem Survey</h2>
+          <p>Konfigurasi branding perusahaan, judul survey, dan parameter forms</p>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <!-- General Settings Form -->
+        <div class="card" style="padding: 1.75rem;">
+          <h3
+            style="font-family: var(--font-display); margin-bottom: 1.5rem; font-weight: 700; color: var(--color-primary-dark); font-size: 1.25rem;">
+            General Settings
+          </h3>
+
+          <form id="settingsForm" onsubmit="saveGeneralSettings(event)">
+            <div class="form-group">
+              <label for="settingSurveyTitle">Judul Survey</label>
+              <input type="text" id="settingSurveyTitle" class="form-control"
+                placeholder="PT. BINA CUSTOMER SATISFACTION SURVEY">
+            </div>
+
+            <div class="form-group">
+              <label for="settingWelcomeText">Kata Pembuka / Ucapan Selamat Datang</label>
+              <textarea id="settingWelcomeText" class="form-control" rows="4" style="resize: vertical;"
+                placeholder="Tulis ucapan selamat datang untuk responden survey"></textarea>
+            </div>
+
+            <div class="form-group switch-label-group" style="margin-top: 1.5rem; margin-bottom: 1.5rem;">
+              <label class="switch">
+                <input type="checkbox" id="settingShowIdentity">
+                <span class="slider-toggle"></span>
+              </label>
+              <div>
+                <strong style="display: block; font-size: 0.95rem; color: var(--color-text-main);">Wajibkan Pengisian
+                  Identitas</strong>
+                <span style="font-size: 0.8rem; color: var(--color-text-muted);">Jika dinonaktifkan, responden mengisi
+                  secara anonim tanpa pertanyaan identitas</span>
+              </div>
+            </div>
+
+            <button type="submit" class="btn" style="width: auto; padding: 0.75rem 2rem;">
+              <i class="fa-solid fa-floppy-disk"></i> Simpan Pengaturan
+            </button>
+          </form>
+        </div>
+
+        <!-- Branding Settings Form -->
+        <div class="card" style="padding: 1.75rem;">
+          <h3
+            style="font-family: var(--font-display); margin-bottom: 1.5rem; font-weight: 700; color: var(--color-primary-dark); font-size: 1.25rem;">
+            Logo Branding Perusahaan
+          </h3>
+
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+            <div id="logoPreviewContainer" class="logo-upload-preview">
+              <span style="color: var(--color-text-muted); font-size: 0.85rem;"><i class="fa-solid fa-images fa-lg"></i>
+                No Logo Uploaded</span>
+            </div>
+
+            <form id="logoUploadForm" onsubmit="handleLogoUpload(event)" style="width: 100%; text-align: center;">
+              <div class="form-group">
+                <label class="btn btn-secondary"
+                  style="margin-bottom: 0.5rem; display: block; text-align: center; cursor: pointer;">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Pilih File Logo
+                  <input type="file" id="logoFileInput" accept="image/*" style="display: none;"
+                    onchange="previewLogoFile(this)">
+                </label>
+                <div style="font-size: 0.75rem; color: var(--color-text-muted);">Format support: PNG, JPG, SVG. Maks 2MB
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; justify-content: center; margin-top: 1rem;">
+                <button type="submit" class="btn" style="width: auto; font-size: 0.85rem; padding: 0.5rem 1rem;"
+                  id="btnSaveLogo" disabled>
+                  Unggah Logo
+                </button>
+                <button type="button" class="btn btn-secondary"
+                  style="width: auto; font-size: 0.85rem; padding: 0.5rem 1rem; border-color: #ef4444; color: #ef4444;"
+                  onclick="resetBrandingLogo()">
+                  Hapus Logo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD/EDIT CATEGORY -->
+  <div id="modalCategory" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalCategoryTitle">Tambah Kategori</h3>
+        <button class="modal-close" onclick="closeCategoryModal()">&times;</button>
+      </div>
+      <form id="formCategory" onsubmit="saveCategory(event)">
+        <input type="hidden" id="modalCategoryId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="catName">Nama Kategori</label>
+            <input type="text" id="catName" class="form-control" required placeholder="Contoh: Quality">
+          </div>
+          <div class="form-group">
+            <label for="catDescription">Keterangan / Deskripsi</label>
+            <input type="text" id="catDescription" class="form-control"
+              placeholder="Deskripsi singkat mengenai kategori">
+          </div>
+          <div class="form-group">
+            <label for="catSortOrder">Nomor Urutan Tampil</label>
+            <input type="number" id="catSortOrder" class="form-control" value="0" min="0">
+          </div>
+          <div class="form-group switch-label-group" style="margin-top: 1rem;">
+            <label class="switch">
+              <input type="checkbox" id="catIsActive" checked>
+              <span class="slider-toggle"></span>
+            </label>
+            <span>Kategori Aktif</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeCategoryModal()">Batal</button>
+          <button type="submit" class="btn">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD/EDIT QUESTION -->
+  <div id="modalQuestion" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalQuestionTitle">Tambah Pertanyaan</h3>
+        <button class="modal-close" onclick="closeQuestionModal()">&times;</button>
+      </div>
+      <form id="formQuestion" onsubmit="saveQuestion(event)">
+        <input type="hidden" id="modalQuestionId">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="qCategory">Kategori</label>
+            <select id="qCategory" class="form-control" required>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="qType">Tipe Pertanyaan</label>
+            <select id="qType" class="form-control" required onchange="toggleQuestionTypeFields()">
+              <option value="star" selected>Star Rating (Bintang 1-5)</option>
+              <option value="text">Essay / Text (Teks Bebas)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="qText">Kalimat Pertanyaan</label>
+            <textarea id="qText" class="form-control" required rows="3"
+              placeholder="Masukkan kalimat pertanyaan survey"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="qSortOrder">Nomor Urutan Tampil</label>
+            <input type="number" id="qSortOrder" class="form-control" value="0" min="0">
+          </div>
+          <div class="form-group" id="qWeightGroup">
+            <label for="qWeight">Bobot Penilaian</label>
+            <input type="number" id="qWeight" class="form-control" value="1" min="1">
+          </div>
+          <div class="form-group switch-label-group" style="margin-top: 1rem;">
+            <label class="switch">
+              <input type="checkbox" id="qIsActive" checked>
+              <span class="slider-toggle"></span>
+            </label>
+            <span>Pertanyaan Aktif</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeQuestionModal()">Batal</button>
+          <button type="submit" class="btn">Simpan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: RESPONDENT DETAIL CARD -->
+  <div id="modalRespondentDetail" class="modal">
+    <div class="modal-content" style="max-width: 680px; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <h3 class="modal-title">Tanggapan Detail Responden</h3>
+        <button class="modal-close" onclick="closeRespondentDetailModal()">&times;</button>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; flex: 1;">
+        <!-- Respondent Metadata Info -->
+        <div class="card"
+          style="box-shadow: none; border: 1px solid var(--color-border); padding: 1.25rem; margin-bottom: 1.5rem; background-color: #f8fafc;">
+          <div class="details-meta-grid">
+            <div><strong>Nama Responden:</strong> <span id="detailRespName">Admin</span></div>
+            <div><strong>Departemen:</strong> <span id="detailRespDept">IT</span></div>
+            <div><strong>Waktu Kirim:</strong> <span id="detailRespTime">29 Jun 2026</span></div>
+            <div><strong>Total Skor:</strong> <span id="detailRespScore">112</span></div>
+            <div><strong>Persentase:</strong> <span id="detailRespPercent">90%</span></div>
+            <div><strong>Predikat:</strong> <span id="detailRespPredicate" class="badge badge-active">Sangat Puas</span>
+            </div>
+          </div>
+        </div>
+
+        <h4
+          style="font-family: var(--font-display); font-weight: 700; color: var(--color-primary-dark); margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.25rem;">
+          Daftar Jawaban Nilai
+        </h4>
+
+        <!-- Answers list grouped by category -->
+        <div id="respondentDetailAnswers">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" style="width: auto;" onclick="closeRespondentDetailModal()">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: IMAGE CROPPER -->
+  <div id="modalCrop" class="modal" style="z-index: 2000;">
+    <div class="modal-content" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3 class="modal-title">Potong Logo (Rasio 1:1)</h3>
+        <button class="modal-close" onclick="closeCropModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="text-align: center; max-height: 60vh; overflow: hidden; padding: 1rem;">
+        <div
+          style="max-width: 100%; height: 320px; background-color: #f8fafc; display: flex; justify-content: center; align-items: center; border-radius: 8px; border: 1px solid var(--color-border); overflow: hidden;">
+          <img id="cropImage" style="max-width: 100%; max-height: 100%; display: block; margin: auto;">
+        </div>
+      </div>
+      <div class="modal-footer" style="gap: 8px;">
+        <button type="button" class="btn btn-secondary" onclick="closeCropModal()">Batal</button>
+        <button type="button" class="btn" onclick="applyCrop()">Potong & Gunakan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin Controller JS -->
+  <script src="/js/admin.js"></script>
+</body>
+
+</html>

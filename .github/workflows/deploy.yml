@@ -21,6 +21,14 @@ jobs:
         with:
           version: 9
 
+      - name: Install Dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Application Bundle
+        run: |
+          pnpm exec esbuild server.js --bundle --platform=node --target=node20 --outfile=dist/server.js --external:pg-native
+          cp -r public dist/
+
       - name: Install Cloudflared
         run: |
           curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
@@ -44,22 +52,18 @@ jobs:
           # Create deployment directory if not exists
           sshpass -p "yuu" ssh root@ssh.yuulabs.web.id "mkdir -p /var/www/bina-survey/"
 
-          # Sync Project Files (excluding local configs, temporary logs, and node_modules)
-          sshpass -p "yuu" rsync -avz --delete \
-            --exclude 'node_modules' \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'test_upload.js' \
-            ./ root@ssh.yuulabs.web.id:/var/www/bina-survey/
+          # Sync compiled standalone output (server.js + public folder)
+          sshpass -p "yuu" rsync -avz --delete ./dist/ root@ssh.yuulabs.web.id:/var/www/bina-survey/
           
-          # Install dependencies and restart app under PM2 on the server
+          # Sync config files
+          sshpass -p "yuu" rsync -avz ./nginx.conf root@ssh.yuulabs.web.id:/var/www/bina-survey/
+          sshpass -p "yuu" rsync -avz ./.env root@ssh.yuulabs.web.id:/var/www/bina-survey/
+          
+          # Restart app under PM2 on the server
           sshpass -p "yuu" ssh root@ssh.yuulabs.web.id "
-            cd /var/www/bina-survey
-            pnpm install --no-frozen-lockfile
-            
             # Restart Survey Node Server with PM2 on port 1301
             pm2 delete bina-survey || true
-            PORT=1301 pm2 start server.js --name bina-survey --cwd /var/www/bina-survey/
+            PORT=1301 pm2 start /var/www/bina-survey/server.js --name bina-survey --cwd /var/www/bina-survey/
           "
 
           # Copy Nginx Configuration and Reload
