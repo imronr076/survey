@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PT. BRAM INNOVATION NETWORK AND ACCESS</title>
-  
+
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
+
+
   <!-- SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
 
   <!-- Loading Animation -->
@@ -37,7 +40,8 @@
     <!-- STEP 1: WELCOME SCREEN -->
     <section id="stepWelcome" class="card welcome-section">
       <p id="welcomeText" class="welcome-text">
-        Terima kasih telah menggunakan layanan PT. BINA. Kami sangat menghargai waktu dan masukan Anda. Survey ini bertujuan untuk meningkatkan kualitas layanan dan sistem yang kami berikan.
+        Terima kasih telah menggunakan layanan PT. BINA. Kami sangat menghargai waktu dan masukan Anda. Survey ini
+        bertujuan untuk meningkatkan kualitas layanan dan sistem yang kami berikan.
       </p>
 
       <div style="margin-top: 2rem; text-align: center;">
@@ -50,10 +54,11 @@
     <!-- STEP 2: IDENTITY SCREEN -->
     <section id="stepIdentity" class="card welcome-section" style="display: none;">
       <div class="form-group" id="identityToggleContainer">
-        <label style="text-align: center; font-size: 1rem; margin-bottom: 1.5rem; display: block; color: var(--color-text-main); font-weight: 700;">
+        <label
+          style="text-align: center; font-size: 1rem; margin-bottom: 1.5rem; display: block; color: var(--color-text-main); font-weight: 700;">
           Apakah Anda bersedia mengisi identitas lengkap?
         </label>
-        
+
         <div class="identity-choice">
           <button type="button" class="choice-btn" id="btnAnonNo" onclick="selectIdentityChoice(true)">
             <i class="fa-solid fa-user-check"></i>
@@ -94,7 +99,7 @@
         <span class="step-indicator" id="wizardStepIndicator">Kategori 1 dari 5</span>
         <span class="category-badge" id="wizardCategoryBadge">Quality</span>
       </div>
-      
+
       <div class="progress-container">
         <div class="progress-bar" id="wizardProgressBar"></div>
       </div>
@@ -120,8 +125,9 @@
         <h2 style="font-family: var(--font-display); font-weight: 800; font-size: 2rem; color: var(--color-primary);">
           HASIL SURVEY
         </h2>
-        <div style="font-size: 0.9rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 700; margin-top: 0.25rem;">
-          PT. BINA CSS
+        <div
+          style="font-size: 0.9rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 700; margin-top: 0.25rem;">
+          PT. BINA
         </div>
       </div>
 
@@ -159,4 +165,5 @@
   <!-- Survey JS Controller -->
   <script src="/js/survey.js"></script>
 </body>
+
 </html>

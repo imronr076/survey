@@ -44,6 +44,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -498,6 +499,13 @@ label {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+.loading-overlay.transparent-loading {
+  background-color: rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  transition: opacity 0.15s ease;
 }
 
 .loading-overlay.active {

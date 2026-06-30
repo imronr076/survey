@@ -1,5 +1,6 @@
 const express = require('express');
 const { Pool } = require('pg');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
@@ -35,9 +36,27 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Test connection
+// Test connection and auto-create indexes/migrations if not exist
 pool.query('SELECT 1')
-  .then(() => console.log('Database pool initialized successfully.'))
+  .then(async () => {
+    console.log('Database pool initialized successfully.');
+    try {
+      // Create Indexes
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_survey_answers_respondent_id ON survey_answers(respondent_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_survey_answers_question_id ON survey_answers(question_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_survey_questions_category_id ON survey_questions(category_id);');
+      await pool.query('CREATE INDEX IF NOT EXISTS idx_respondents_submitted_at ON respondents(submitted_at);');
+      console.log('Database indexes verified/created successfully.');
+
+      // Schema migrations
+      await pool.query("ALTER TABLE survey_questions ADD COLUMN IF NOT EXISTS question_type VARCHAR(20) DEFAULT 'star';");
+      await pool.query("ALTER TABLE survey_answers ADD COLUMN IF NOT EXISTS text_value TEXT NULL;");
+      await pool.query("ALTER TABLE survey_answers ALTER COLUMN rating_value DROP NOT NULL;");
+      console.log('Database schema migrations verified/applied successfully.');
+    } catch (migErr) {
+      console.error('Failed to run startup migrations/indexes:', migErr);
+    }
+  })
   .catch(err => console.error('Database pool initialization failed:', err));
 
 // Multer Storage Configuration for Logo uploads (Using Memory Storage for Serverless environments)
@@ -110,7 +129,7 @@ app.get('/api/survey/questions', async (req, res) => {
       'SELECT id, name, description FROM survey_categories WHERE is_active = 1 ORDER BY sort_order ASC'
     );
     const { rows: questions } = await pool.query(
-      'SELECT id, category_id, question_text, sort_order, weight FROM survey_questions WHERE is_active = 1 ORDER BY sort_order ASC'
+      'SELECT id, category_id, question_text, question_type, sort_order, weight FROM survey_questions WHERE is_active = 1 ORDER BY sort_order ASC'
     );
 
     const data = categories.map(cat => {
@@ -151,35 +170,55 @@ app.post('/api/survey/submit', async (req, res) => {
     );
     const respondentId = respResult.rows[0].id;
 
-    // 2. Fetch questions weights to calculate scores
+    // 2. Fetch questions weights and types to calculate scores
     const questionsResult = await client.query(
-      'SELECT id, weight FROM survey_questions WHERE is_active = 1'
+      'SELECT id, weight, question_type FROM survey_questions WHERE is_active = 1'
     );
     const questions = questionsResult.rows;
     const qMap = {};
-    questions.forEach(q => { qMap[q.id] = q.weight; });
+    questions.forEach(q => {
+      qMap[q.id] = { weight: q.weight, type: q.question_type || 'star' };
+    });
 
     let totalScore = 0;
     let maxPossibleScore = 0;
 
-    // 3. Insert Answers and calculate score
+    // 3. Prepare Answers data and calculate score
+    const insertValues = [];
+    const insertPlaceholders = [];
+    let paramIndex = 1;
+
     for (const ans of answers) {
       const qId = parseInt(ans.question_id);
-      const rating = parseInt(ans.rating_value);
+      const qMeta = qMap[qId] || { weight: 1, type: 'star' };
 
-      if (isNaN(qId) || isNaN(rating) || rating < 1 || rating > 5) {
-        throw new Error(`Invalid response for question ID ${ans.question_id}`);
+      let rating = null;
+      let textVal = null;
+
+      if (qMeta.type === 'text') {
+        textVal = ans.text_value !== undefined && ans.text_value !== null ? String(ans.text_value).trim() : null;
+        // Text responses do not affect rating calculations.
+      } else {
+        // Star rating
+        rating = parseInt(ans.rating_value);
+        if (isNaN(qId) || isNaN(rating) || rating < 1 || rating > 5) {
+          throw new Error(`Invalid response for question ID ${ans.question_id}`);
+        }
+        const weight = qMeta.weight;
+        totalScore += (rating * weight);
+        maxPossibleScore += (5 * weight);
       }
 
-      await client.query(
-        'INSERT INTO survey_answers (respondent_id, question_id, rating_value) VALUES ($1, $2, $3)',
-        [respondentId, qId, rating]
-      );
-
-      const weight = qMap[qId] !== undefined ? qMap[qId] : 1;
-      totalScore += (rating * weight);
-      maxPossibleScore += (5 * weight);
+      insertPlaceholders.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3})`);
+      insertValues.push(respondentId, qId, rating, textVal);
+      paramIndex += 4;
     }
+
+    const insertAnswersQuery = `
+      INSERT INTO survey_answers (respondent_id, question_id, rating_value, text_value) 
+      VALUES ${insertPlaceholders.join(', ')}
+    `;
+    await client.query(insertAnswersQuery, insertValues);
 
     // Calculate percentage and predicate
     const percentage = maxPossibleScore > 0 ? parseFloat(((totalScore / maxPossibleScore) * 100).toFixed(2)) : 0;
@@ -258,17 +297,22 @@ app.post('/api/admin/login', async (req, res) => {
 // Get high level dashboard stats
 app.get('/api/admin/dashboard-stats', authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.query;
-  let dateFilter = '';
   const params = [];
+  const respWhereClauses = [];
+  const joinWhereClauses = ["sq.question_type = 'star'"];
 
   if (startDate && endDate) {
-    dateFilter = 'WHERE r.submitted_at BETWEEN $1 AND $2';
+    respWhereClauses.push('r.submitted_at BETWEEN $1 AND $2');
+    joinWhereClauses.push('r.submitted_at BETWEEN $1 AND $2');
     params.push(`${startDate} 00:00:00`, `${endDate} 23:59:59`);
   }
 
+  const respWhereFilter = respWhereClauses.length > 0 ? 'WHERE ' + respWhereClauses.join(' AND ') : '';
+  const joinWhereFilter = 'WHERE ' + joinWhereClauses.join(' AND ');
+
   try {
     // 1. Total respondents
-    const respResult = await pool.query(`SELECT COUNT(*) as total FROM respondents r ${dateFilter}`, params);
+    const respResult = await pool.query(`SELECT COUNT(*) as total FROM respondents r ${respWhereFilter}`, params);
     const totalRespondents = parseInt(respResult.rows[0].total);
 
     // 2. Average satisfaction score and percentage
@@ -276,7 +320,7 @@ app.get('/api/admin/dashboard-stats', authenticateToken, async (req, res) => {
       SELECT AVG(sr.percentage) as avg_percent
       FROM survey_results sr
       INNER JOIN respondents r ON sr.respondent_id = r.id
-      ${dateFilter}
+      ${respWhereFilter}
     `, params);
     const overallSatisfaction = avgResult.rows[0].avg_percent ? parseFloat(parseFloat(avgResult.rows[0].avg_percent).toFixed(2)) : 0;
 
@@ -285,19 +329,19 @@ app.get('/api/admin/dashboard-stats', authenticateToken, async (req, res) => {
       SELECT sr.predicate, COUNT(*) as count
       FROM survey_results sr
       INNER JOIN respondents r ON sr.respondent_id = r.id
-      ${dateFilter}
+      ${respWhereFilter}
       GROUP BY sr.predicate
     `, params);
     const predicatesDistribution = predResult.rows;
 
-    // 4. Score by categories
+    // 4. Score by categories (only star questions)
     const categoryScoresResult = await pool.query(`
       SELECT sc.id, sc.name, AVG(sa.rating_value) as avg_rating
       FROM survey_answers sa
       INNER JOIN survey_questions sq ON sa.question_id = sq.id
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
-      ${dateFilter}
+      ${joinWhereFilter}
       GROUP BY sc.id, sc.name, sc.sort_order
       ORDER BY sc.sort_order ASC
     `, params);
@@ -321,13 +365,15 @@ app.get('/api/admin/dashboard-stats', authenticateToken, async (req, res) => {
 // Detailed chart data (by category & by question)
 app.get('/api/admin/charts', authenticateToken, async (req, res) => {
   const { startDate, endDate } = req.query;
-  let dateFilter = '';
   const params = [];
+  const joinWhereClauses = ["sq.question_type = 'star'"];
 
   if (startDate && endDate) {
-    dateFilter = 'WHERE r.submitted_at BETWEEN $1 AND $2';
+    joinWhereClauses.push('r.submitted_at BETWEEN $1 AND $2');
     params.push(`${startDate} 00:00:00`, `${endDate} 23:59:59`);
   }
+
+  const joinWhereFilter = 'WHERE ' + joinWhereClauses.join(' AND ');
 
   try {
     // 1. Avg rating per category
@@ -337,7 +383,7 @@ app.get('/api/admin/charts', authenticateToken, async (req, res) => {
       INNER JOIN survey_questions sq ON sa.question_id = sq.id
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
-      ${dateFilter}
+      ${joinWhereFilter}
       GROUP BY sc.id, sc.name, sc.sort_order
       ORDER BY sc.sort_order ASC
     `, params);
@@ -350,7 +396,7 @@ app.get('/api/admin/charts', authenticateToken, async (req, res) => {
       INNER JOIN survey_questions sq ON sa.question_id = sq.id
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
       INNER JOIN respondents r ON sa.respondent_id = r.id
-      ${dateFilter}
+      ${joinWhereFilter}
       GROUP BY sq.id, sq.question_text, sc.name, sc.sort_order, sq.sort_order
       ORDER BY sc.sort_order ASC, sq.sort_order ASC
     `, params);
@@ -395,7 +441,7 @@ app.get('/api/admin/respondents', authenticateToken, async (req, res) => {
 
     // Get detailed answers for all
     const ansResult = await pool.query(`
-      SELECT sa.respondent_id, sa.question_id, sq.question_text, sc.name as category_name, sa.rating_value
+      SELECT sa.respondent_id, sa.question_id, sq.question_text, sq.question_type, sc.name as category_name, sa.rating_value, sa.text_value
       FROM survey_answers sa
       INNER JOIN survey_questions sq ON sa.question_id = sq.id
       INNER JOIN survey_categories sc ON sq.category_id = sc.id
@@ -492,7 +538,7 @@ app.get('/api/admin/questions', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/admin/questions', authenticateToken, async (req, res) => {
-  const { category_id, question_text, sort_order, is_active, weight } = req.body;
+  const { category_id, question_text, question_type, sort_order, is_active, weight } = req.body;
 
   if (!category_id || !question_text) {
     return res.status(400).json({ error: 'Category and question text are required' });
@@ -500,10 +546,10 @@ app.post('/api/admin/questions', authenticateToken, async (req, res) => {
 
   try {
     const result = await pool.query(
-      'INSERT INTO survey_questions (category_id, question_text, sort_order, is_active, weight) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-      [category_id, question_text, sort_order || 0, is_active !== undefined ? is_active : 1, weight !== undefined ? weight : 1]
+      'INSERT INTO survey_questions (category_id, question_text, question_type, sort_order, is_active, weight) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [category_id, question_text, question_type || 'star', sort_order || 0, is_active !== undefined ? is_active : 1, weight !== undefined ? weight : 1]
     );
-    res.status(201).json({ id: result.rows[0].id, category_id, question_text, sort_order, is_active, weight });
+    res.status(201).json({ id: result.rows[0].id, category_id, question_text, question_type, sort_order, is_active, weight });
   } catch (error) {
     res.status(500).json({ error: 'Error creating question' });
   }
@@ -511,7 +557,7 @@ app.post('/api/admin/questions', authenticateToken, async (req, res) => {
 
 app.put('/api/admin/questions/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { category_id, question_text, sort_order, is_active, weight } = req.body;
+  const { category_id, question_text, question_type, sort_order, is_active, weight } = req.body;
 
   if (!category_id || !question_text) {
     return res.status(400).json({ error: 'Category and question text are required' });
@@ -519,10 +565,10 @@ app.put('/api/admin/questions/:id', authenticateToken, async (req, res) => {
 
   try {
     await pool.query(
-      'UPDATE survey_questions SET category_id = $1, question_text = $2, sort_order = $3, is_active = $4, weight = $5 WHERE id = $6',
-      [category_id, question_text, sort_order, is_active, weight, id]
+      'UPDATE survey_questions SET category_id = $1, question_text = $2, question_type = $3, sort_order = $4, is_active = $5, weight = $6 WHERE id = $7',
+      [category_id, question_text, question_type || 'star', sort_order, is_active, weight, id]
     );
-    res.json({ success: true, id, category_id, question_text, sort_order, is_active, weight });
+    res.json({ success: true, id, category_id, question_text, question_type, sort_order, is_active, weight });
   } catch (error) {
     res.status(500).json({ error: 'Error updating question' });
   }
@@ -565,28 +611,100 @@ app.post('/api/admin/settings', authenticateToken, async (req, res) => {
   }
 });
 
-// Logo upload route
+function hexSha256(stringOrBuffer) {
+  return crypto.createHash('sha256').update(stringOrBuffer).digest('hex');
+}
+
+function hmacSha256(key, string) {
+  return crypto.createHmac('sha256', key).update(string).digest();
+}
+
+function getSignatureKey(key, dateStamp, regionName, serviceName) {
+  const kDate = hmacSha256('AWS4' + key, dateStamp);
+  const kRegion = hmacSha256(kDate, regionName);
+  const kService = hmacSha256(kRegion, serviceName);
+  const kSigning = hmacSha256(kService, 'aws4_request');
+  return kSigning;
+}
+
+// S3 V4 Signature cURL upload implementation in Node.js
+async function uploadToS3(fileBuffer, mimetype) {
+  const ACCESS_KEY = "GK44391cb62433dffc48539039";
+  const SECRET_KEY = "cf8eff575be3d9245908cf72f8e844db76f604fd9742852c36fcaee34b59d3df";
+  const BUCKET = "bina";
+  const ENDPOINT = "cdn.api57.web.id";
+  const FILE_KEY = `logo/bina_${Date.now()}.jpg`;
+  const REGION = "garage";
+  const SERVICE = "s3";
+
+  const canonicalUri = `/${BUCKET}/${FILE_KEY}`;
+  const canonicalQuery = "";
+  
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]/g, "").split(".")[0] + "Z";
+  const dateStamp = amzDate.substring(0, 8);
+
+  const payloadHash = hexSha256(fileBuffer);
+  
+  const canonicalHeaders = `host:${ENDPOINT}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = "host;x-amz-content-sha256;x-amz-date";
+
+  const canonicalRequest = `PUT\n${canonicalUri}\n${canonicalQuery}\n${canonicalHeaders}\n${signedHeaders}\n${payloadHash}`;
+  const canonicalRequestHash = hexSha256(canonicalRequest);
+
+  const algorithm = "AWS4-HMAC-SHA256";
+  const credentialScope = `${dateStamp}/${REGION}/${SERVICE}/aws4_request`;
+  const stringToSign = `${algorithm}\n${amzDate}\n${credentialScope}\n${canonicalRequestHash}`;
+
+  const signingKey = getSignatureKey(SECRET_KEY, dateStamp, REGION, SERVICE);
+  const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
+
+  const authorizationHeader = `${algorithm} Credential=${ACCESS_KEY}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  const url = `https://${ENDPOINT}${canonicalUri}`;
+  const contentType = mimetype || "image/jpeg";
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Host": ENDPOINT,
+      "Content-Type": contentType,
+      "X-Amz-Date": amzDate,
+      "X-Amz-Content-SHA256": payloadHash,
+      "Authorization": authorizationHeader
+    },
+    body: fileBuffer
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`S3 upload failed: ${response.status} - ${errorText}`);
+  }
+
+  return `https://${BUCKET}.cdn-bina.web.id/${FILE_KEY}`;
+}
+
+// Logo upload route (S3 Integration)
 app.post('/api/admin/settings/logo', authenticateToken, upload.single('logo'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No image file uploaded' });
   }
 
   try {
-    // Generate Base64 Data URI
-    const base64Data = req.file.buffer.toString('base64');
-    const logoDataUri = `data:${req.file.mimetype};base64,${base64Data}`;
+    // Upload to S3
+    const s3Url = await uploadToS3(req.file.buffer, req.file.mimetype);
 
-    // Save the Base64 string directly in settings table
+    // Save the S3 URL directly in settings table
     await pool.query(
       `INSERT INTO settings (setting_key, setting_value) VALUES ($1, $2) 
        ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
-      ['logo_path', logoDataUri]
+      ['logo_path', s3Url]
     );
 
-    res.json({ success: true, logo_path: logoDataUri });
+    res.json({ success: true, logo_path: s3Url });
   } catch (error) {
-    console.error('Error saving uploaded logo:', error);
-    res.status(500).json({ error: 'Internal server error during logo saving' });
+    console.error('Error saving uploaded logo to S3:', error);
+    res.status(500).json({ error: error.message || 'Internal server error during logo saving' });
   }
 });
 

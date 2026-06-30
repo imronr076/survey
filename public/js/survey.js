@@ -6,6 +6,22 @@ let currentCategoryIndex = 0;
 let isIdentityEnabled = true; // From settings: show_identity
 let wantsIdentity = null; // null, true, or false
 
+// Favicon updater helper with cache-busting timestamp support
+function updateFavicon(logoUrl) {
+  if (!logoUrl) return;
+  const urlWithBuster = logoUrl.includes('?t=') ? logoUrl : `${logoUrl}?t=${Date.now()}`;
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.getElementsByTagName('head')[0].appendChild(link);
+  }
+  link.href = urlWithBuster;
+  if (logoUrl.endsWith('.svg') || logoUrl.includes('.svg?')) link.type = 'image/svg+xml';
+  else if (logoUrl.endsWith('.png') || logoUrl.includes('.png?')) link.type = 'image/png';
+  else link.type = 'image/jpeg';
+}
+
 // Loader utility
 const loader = {
   show: () => document.getElementById('loadingOverlay').classList.add('active'),
@@ -35,9 +51,11 @@ async function initSurvey() {
       document.getElementById('welcomeText').textContent = configData.welcome_text;
     }
     if (configData.logo_path) {
+      const logoWithBuster = `${configData.logo_path}?t=${Date.now()}`;
       document.getElementById('surveyLogoContainer').innerHTML = `
-        <img src="${configData.logo_path}" alt="PT. BINA Logo" class="brand-logo">
+        <img src="${logoWithBuster}" alt="PT. BINA Logo" class="brand-logo">
       `;
+      updateFavicon(logoWithBuster);
     }
 
     isIdentityEnabled = configData.show_identity !== '0';
@@ -185,34 +203,49 @@ function renderActiveCategory() {
   category.questions.forEach((q) => {
     const questionEl = document.createElement('div');
     questionEl.className = 'question-item';
-    
-    const selectedRating = responses[q.id] || 0;
 
-    questionEl.innerHTML = `
-      <div class="question-text">${q.question_text}</div>
-      <div class="star-rating">
-        <input type="radio" id="q${q.id}_star5" name="q${q.id}" value="5" ${selectedRating === 5 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 5)">
-        <label for="q${q.id}_star5" title="Sangat Puas"><i class="fa-solid fa-star"></i></label>
-        
-        <input type="radio" id="q${q.id}_star4" name="q${q.id}" value="4" ${selectedRating === 4 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 4)">
-        <label for="q${q.id}_star4" title="Puas"><i class="fa-solid fa-star"></i></label>
-        
-        <input type="radio" id="q${q.id}_star3" name="q${q.id}" value="3" ${selectedRating === 3 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 3)">
-        <label for="q${q.id}_star3" title="Cukup Puas"><i class="fa-solid fa-star"></i></label>
-        
-        <input type="radio" id="q${q.id}_star2" name="q${q.id}" value="2" ${selectedRating === 2 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 2)">
-        <label for="q${q.id}_star2" title="Tidak Puas"><i class="fa-solid fa-star"></i></label>
-        
-        <input type="radio" id="q${q.id}_star1" name="q${q.id}" value="1" ${selectedRating === 1 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 1)">
-        <label for="q${q.id}_star1" title="Sangat Tidak Puas"><i class="fa-solid fa-star"></i></label>
-      </div>
-    `;
+    if (q.question_type === 'text') {
+      const textValue = responses[q.id] || '';
+      questionEl.innerHTML = `
+        <div class="question-text">${q.question_text}</div>
+        <div class="text-response" style="margin-top: 0.5rem; margin-bottom: 0.5rem;">
+          <textarea class="form-control" placeholder="Tulis masukan atau jawaban Anda di sini (opsional)..." rows="3" style="resize: vertical;" oninput="handleTextChange(${q.id}, this.value)">${textValue}</textarea>
+        </div>
+      `;
+    } else {
+      const selectedRating = responses[q.id] || 0;
+      questionEl.innerHTML = `
+        <div class="question-text">${q.question_text}</div>
+        <div class="star-rating">
+          <input type="radio" id="q${q.id}_star5" name="q${q.id}" value="5" ${selectedRating === 5 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 5)">
+          <label for="q${q.id}_star5" title="Sangat Puas"><i class="fa-solid fa-star"></i></label>
+          
+          <input type="radio" id="q${q.id}_star4" name="q${q.id}" value="4" ${selectedRating === 4 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 4)">
+          <label for="q${q.id}_star4" title="Puas"><i class="fa-solid fa-star"></i></label>
+          
+          <input type="radio" id="q${q.id}_star3" name="q${q.id}" value="3" ${selectedRating === 3 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 3)">
+          <label for="q${q.id}_star3" title="Cukup Puas"><i class="fa-solid fa-star"></i></label>
+          
+          <input type="radio" id="q${q.id}_star2" name="q${q.id}" value="2" ${selectedRating === 2 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 2)">
+          <label for="q${q.id}_star2" title="Tidak Puas"><i class="fa-solid fa-star"></i></label>
+          
+          <input type="radio" id="q${q.id}_star1" name="q${q.id}" value="1" ${selectedRating === 1 ? 'checked' : ''} onchange="handleRatingChange(${q.id}, 1)">
+          <label for="q${q.id}_star1" title="Sangat Tidak Puas"><i class="fa-solid fa-star"></i></label>
+        </div>
+      `;
+    }
     container.appendChild(questionEl);
   });
 }
 
 // Track rating changes
 function handleRatingChange(questionId, value) {
+  responses[questionId] = value;
+  updateProgressBar();
+}
+
+// Track text response changes
+function handleTextChange(questionId, value) {
   responses[questionId] = value;
   updateProgressBar();
 }
@@ -226,21 +259,29 @@ function updateProgressBar() {
 
   if (totalQuestions === 0) return;
 
-  const answeredCount = Object.keys(responses).length;
+  let answeredCount = 0;
+  Object.entries(responses).forEach(([qId, val]) => {
+    if (val !== undefined && val !== null && val !== '') {
+      answeredCount++;
+    }
+  });
+
   const progressPercent = Math.min(100, Math.round((answeredCount / totalQuestions) * 100));
 
   const progressBar = document.getElementById('wizardProgressBar');
   progressBar.style.width = `${progressPercent}%`;
 }
 
-// Check if all questions in the current category are filled
+// Check if all questions in the current category are filled (text questions are optional)
 function validateCurrentCategory() {
   const currentCategory = surveyCategories[currentCategoryIndex];
   const missing = [];
 
   currentCategory.questions.forEach(q => {
-    if (!responses[q.id]) {
-      missing.push(q.question_text);
+    if (q.question_type !== 'text') {
+      if (!responses[q.id]) {
+        missing.push(q.question_text);
+      }
     }
   });
 
@@ -298,12 +339,25 @@ async function submitSurvey() {
   const name = isAnon ? '' : document.getElementById('respName').value.trim();
   const dept = isAnon ? '' : document.getElementById('respDept').value.trim();
 
-  // Map answers array
-  const formattedAnswers = Object.entries(responses).map(([qId, val]) => {
-    return {
-      question_id: qId,
-      rating_value: val
-    };
+  // Map answers array (including all questions in categories)
+  const formattedAnswers = [];
+  surveyCategories.forEach(cat => {
+    cat.questions.forEach(q => {
+      const val = responses[q.id];
+      if (q.question_type === 'text') {
+        formattedAnswers.push({
+          question_id: q.id,
+          rating_value: null,
+          text_value: (val !== undefined && val !== null && val !== '') ? String(val) : null
+        });
+      } else {
+        formattedAnswers.push({
+          question_id: q.id,
+          rating_value: val ? parseInt(val) : null,
+          text_value: null
+        });
+      }
+    });
   });
 
   const payload = {

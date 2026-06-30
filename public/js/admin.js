@@ -12,10 +12,39 @@ let chartQuestionInstance = null;
 let respondentsData = [];
 let categoriesList = [];
 let questionsList = [];
+let cropperInstance = null;
+let croppedBlob = null;
+
+// Favicon updater helper
+function updateFavicon(logoUrl) {
+  if (!logoUrl) return;
+  let link = document.querySelector("link[rel~='icon']");
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.getElementsByTagName('head')[0].appendChild(link);
+  }
+  link.href = logoUrl;
+  if (logoUrl.endsWith('.svg')) link.type = 'image/svg+xml';
+  else if (logoUrl.endsWith('.png')) link.type = 'image/png';
+  else link.type = 'image/jpeg';
+}
 
 const loader = {
-  show: () => document.getElementById('loadingOverlay').classList.add('active'),
-  hide: () => document.getElementById('loadingOverlay').classList.remove('active')
+  show: (isTransparent = false) => {
+    const el = document.getElementById('loadingOverlay');
+    if (isTransparent) {
+      el.classList.add('transparent-loading');
+    } else {
+      el.classList.remove('transparent-loading');
+    }
+    el.classList.add('active');
+  },
+  hide: () => {
+    const el = document.getElementById('loadingOverlay');
+    el.classList.remove('active');
+    el.classList.remove('transparent-loading');
+  }
 };
 
 // Headers with Authorization
@@ -27,13 +56,23 @@ const getHeaders = () => ({
 // Init Dashboard
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('adminNameDisplay').textContent = adminUser.name || 'Administrator';
-  
+
   // Set default filter dates (current month)
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-  
+
   document.getElementById('filterStartDate').value = formatDateISO(firstDay);
   document.getElementById('filterEndDate').value = formatDateISO(today);
+
+  // Load configuration at startup for favicon/branding
+  fetch('/api/survey/config')
+    .then(res => res.json())
+    .then(config => {
+      if (config.logo_path) {
+        updateFavicon(config.logo_path);
+      }
+    })
+    .catch(err => console.error('Failed to load branding favicon:', err));
 
   // Initialize view
   switchTab('dashboard');
@@ -100,15 +139,15 @@ async function switchTab(tabId) {
   } else if (tabId === 'settings') {
     await loadSettingsData();
   }
-  
+
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// ==========================================
+// ========================================== 
 // TAB 1: DASHBOARD RINGKASAN DATA
 // ==========================================
 async function loadDashboardData() {
-  loader.show();
+  loader.show(true);
   const startDate = document.getElementById('filterStartDate').value;
   const endDate = document.getElementById('filterEndDate').value;
 
@@ -157,7 +196,7 @@ function applyFilters() {
 // Render rating averages by category
 function renderCategoryChart(data) {
   const ctx = document.getElementById('chartCategory').getContext('2d');
-  
+
   if (chartCategoryInstance) {
     chartCategoryInstance.destroy();
   }
@@ -199,7 +238,7 @@ function renderCategoryChart(data) {
 // Render ratings per question
 function renderQuestionChart(data) {
   const ctx = document.getElementById('chartQuestion').getContext('2d');
-  
+
   if (chartQuestionInstance) {
     chartQuestionInstance.destroy();
   }
@@ -256,7 +295,7 @@ function renderQuestionChart(data) {
 function populateRespondentsTable(respondents) {
   const tbody = document.querySelector('#tableRespondents tbody');
   tbody.innerHTML = '';
-  
+
   document.getElementById('respondentsCountLabel').textContent = `Menampilkan ${respondents.length} responden`;
 
   if (respondents.length === 0) {
@@ -266,7 +305,7 @@ function populateRespondentsTable(respondents) {
 
   respondents.forEach(resp => {
     const tr = document.createElement('tr');
-    
+
     const nama = resp.is_anonymous ? '<span class="badge badge-anon">Anonim</span>' : resp.name;
     const dept = resp.is_anonymous ? '<span class="badge badge-anon">Anonim</span>' : (resp.department || '-');
     const tgl = formatDateIndo(resp.submitted_at);
@@ -312,7 +351,7 @@ function viewRespondentDetail(id) {
   const predEl = document.getElementById('detailRespPredicate');
   predEl.textContent = resp.predicate;
   predEl.className = 'badge';
-  
+
   const predLower = resp.predicate.toLowerCase();
   if (predLower === 'sangat puas') predEl.classList.add('predicate-sangat-puas');
   else if (predLower === 'puas') predEl.classList.add('predicate-puas');
@@ -336,20 +375,29 @@ function viewRespondentDetail(id) {
   Object.entries(catGroups).forEach(([catName, qList]) => {
     const section = document.createElement('div');
     section.style.marginBottom = '1.25rem';
-    
+
     let qItemsHtml = '';
     qList.forEach(q => {
-      // Star elements representing answer ratings
-      const starHtml = '<i class="fa-solid fa-star" style="color: var(--color-star-filled); margin-right: 2px;"></i>'.repeat(q.rating_value) 
-        + '<i class="fa-regular fa-star" style="color: var(--color-star-empty); margin-right: 2px;"></i>'.repeat(5 - q.rating_value);
-
-      qItemsHtml += `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px dashed var(--color-border);">
-          <span style="font-size: 0.9rem; color: var(--color-text-main); max-width: 70%;">${q.question_text}</span>
+      let answerDisplayHtml = '';
+      if (q.question_type === 'text') {
+        const textVal = q.text_value !== undefined && q.text_value !== null ? q.text_value : '-';
+        answerDisplayHtml = `<span style="font-style: italic; color: var(--color-text-muted); font-size: 0.9rem; max-width: 60%; word-break: break-word; text-align: right;">"${textVal}"</span>`;
+      } else {
+        const rating = q.rating_value || 0;
+        const starHtml = '<i class="fa-solid fa-star" style="color: var(--color-star-filled); margin-right: 2px;"></i>'.repeat(rating)
+          + '<i class="fa-regular fa-star" style="color: var(--color-star-empty); margin-right: 2px;"></i>'.repeat(5 - rating);
+        answerDisplayHtml = `
           <div style="display: flex; align-items: center; gap: 8px;">
             <div style="font-size: 0.9rem;">${starHtml}</div>
-            <strong style="color: var(--color-primary-dark); font-size: 0.9rem;">(${q.rating_value})</strong>
+            <strong style="color: var(--color-primary-dark); font-size: 0.9rem;">(${rating})</strong>
           </div>
+        `;
+      }
+
+      qItemsHtml += `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px dashed var(--color-border); gap: 10px;">
+          <span style="font-size: 0.9rem; color: var(--color-text-main); max-width: 70%;">${q.question_text}</span>
+          ${answerDisplayHtml}
         </div>
       `;
     });
@@ -400,9 +448,9 @@ function populateCategoriesTable(categories) {
 
   categories.forEach(cat => {
     const tr = document.createElement('tr');
-    
-    const activeBadge = cat.is_active 
-      ? '<span class="badge badge-active">Aktif</span>' 
+
+    const activeBadge = cat.is_active
+      ? '<span class="badge badge-active">Aktif</span>'
       : '<span class="badge badge-inactive">Tidak Aktif</span>';
 
     tr.innerHTML = `
@@ -549,22 +597,29 @@ function populateQuestionsTable(questions) {
   tbody.innerHTML = '';
 
   if (questions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--color-text-muted);">Belum ada pertanyaan survey.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--color-text-muted);">Belum ada pertanyaan survey.</td></tr>';
     return;
   }
 
   questions.forEach(q => {
     const tr = document.createElement('tr');
-    
-    const activeBadge = q.is_active 
-      ? '<span class="badge badge-active">Aktif</span>' 
+
+    const activeBadge = q.is_active
+      ? '<span class="badge badge-active">Aktif</span>'
       : '<span class="badge badge-inactive">Tidak Aktif</span>';
+
+    const typeBadge = q.question_type === 'text'
+      ? '<span class="badge" style="background-color: #e0f2fe; color: #0369a1;">Text</span>'
+      : '<span class="badge" style="background-color: #fef3c7; color: #b45309;">Star</span>';
+
+    const weightDisplay = q.question_type === 'text' ? '-' : q.weight;
 
     tr.innerHTML = `
       <td><span class="category-badge">${q.category_name}</span></td>
       <td style="font-weight: 700; width: 80px;">${q.sort_order}</td>
       <td style="font-weight: 600; color: var(--color-text-main); font-size: 0.95rem;">${q.question_text}</td>
-      <td style="font-weight: 700; width: 80px;">${q.weight}</td>
+      <td>${typeBadge}</td>
+      <td style="font-weight: 700; width: 80px;">${weightDisplay}</td>
       <td>${activeBadge}</td>
       <td>
         <div class="btn-action-group">
@@ -584,7 +639,7 @@ function populateQuestionsTable(questions) {
 function populateCategoryDropdown(categories) {
   const select = document.getElementById('qCategory');
   select.innerHTML = '<option value="" disabled selected>-- Pilih Kategori --</option>';
-  
+
   categories.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c.id;
@@ -593,10 +648,22 @@ function populateCategoryDropdown(categories) {
   });
 }
 
+function toggleQuestionTypeFields() {
+  const type = document.getElementById('qType').value;
+  const weightGroup = document.getElementById('qWeightGroup');
+  if (type === 'text') {
+    weightGroup.style.display = 'none';
+  } else {
+    weightGroup.style.display = 'block';
+  }
+}
+
 function openQuestionModal() {
   document.getElementById('modalQuestionTitle').textContent = 'Tambah Pertanyaan';
   document.getElementById('modalQuestionId').value = '';
   document.getElementById('qCategory').value = '';
+  document.getElementById('qType').value = 'star';
+  toggleQuestionTypeFields();
   document.getElementById('qText').value = '';
   document.getElementById('qSortOrder').value = '0';
   document.getElementById('qWeight').value = '1';
@@ -615,6 +682,8 @@ function editQuestion(id) {
   document.getElementById('modalQuestionTitle').textContent = 'Edit Pertanyaan';
   document.getElementById('modalQuestionId').value = q.id;
   document.getElementById('qCategory').value = q.category_id;
+  document.getElementById('qType').value = q.question_type || 'star';
+  toggleQuestionTypeFields();
   document.getElementById('qText').value = q.question_text;
   document.getElementById('qSortOrder').value = q.sort_order;
   document.getElementById('qWeight').value = q.weight;
@@ -628,12 +697,13 @@ async function saveQuestion(e) {
 
   const id = document.getElementById('modalQuestionId').value;
   const category_id = document.getElementById('qCategory').value;
+  const question_type = document.getElementById('qType').value;
   const question_text = document.getElementById('qText').value.trim();
   const sort_order = parseInt(document.getElementById('qSortOrder').value) || 0;
   const weight = parseInt(document.getElementById('qWeight').value) || 1;
   const is_active = document.getElementById('qIsActive').checked ? 1 : 0;
 
-  const payload = { category_id, question_text, sort_order, is_active, weight };
+  const payload = { category_id, question_text, question_type, sort_order, is_active, weight };
   const method = id ? 'PUT' : 'POST';
   const url = id ? `/api/admin/questions/${id}` : '/api/admin/questions';
 
@@ -707,6 +777,7 @@ async function loadSettingsData() {
     const logoPreview = document.getElementById('logoPreviewContainer');
     if (config.logo_path) {
       logoPreview.innerHTML = `<img src="${config.logo_path}" alt="PT. BINA Logo">`;
+      updateFavicon(config.logo_path);
     } else {
       logoPreview.innerHTML = '<span style="color: var(--color-text-muted); font-size: 0.85rem;"><i class="fa-solid fa-images fa-lg"></i> No Logo Uploaded</span>';
     }
@@ -751,37 +822,97 @@ async function saveGeneralSettings(e) {
   }
 }
 
-// Logo file picker changes
+// Logo file picker changes with Cropper 1:1 modal trigger
 function previewLogoFile(input) {
   const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    const logoPreview = document.getElementById('logoPreviewContainer');
-    logoPreview.innerHTML = `<img src="${e.target.result}" alt="Preview Logo">`;
-    document.getElementById('btnSaveLogo').disabled = false;
+    const cropImg = document.getElementById('cropImage');
+    cropImg.src = e.target.result;
+
+    document.getElementById('modalCrop').classList.add('open');
+
+    // Destroy previous cropper instance if exists
+    if (cropperInstance) {
+      cropperInstance.destroy();
+    }
+
+    // Init cropper with 1:1 aspect ratio
+    setTimeout(() => {
+      cropperInstance = new Cropper(cropImg, {
+        aspectRatio: 1,
+        viewMode: 1,
+        autoCropArea: 1,
+        responsive: true,
+        restore: false,
+        checkCrossOrigin: false,
+        guides: true,
+        center: true,
+        highlight: false,
+        cropBoxMovable: true,
+        cropBoxResizable: true,
+        toggleDragModeOnDblclick: false,
+      });
+    }, 150);
   };
   reader.readAsDataURL(file);
 }
 
-// Logo upload form submission
+// Close cropping modal and reset
+function closeCropModal() {
+  document.getElementById('modalCrop').classList.remove('open');
+  if (cropperInstance) {
+    cropperInstance.destroy();
+    cropperInstance = null;
+  }
+  document.getElementById('logoFileInput').value = '';
+}
+
+// Crop and generate 1:1 blob
+function applyCrop() {
+  if (!cropperInstance) return;
+
+  const canvas = cropperInstance.getCroppedCanvas({
+    width: 300,
+    height: 300
+  });
+
+  const logoPreview = document.getElementById('logoPreviewContainer');
+  logoPreview.innerHTML = `<img src="${canvas.toDataURL('image/jpeg')}" alt="Preview Logo">`;
+
+  document.getElementById('btnSaveLogo').disabled = false;
+
+  canvas.toBlob((blob) => {
+    croppedBlob = blob;
+  }, 'image/jpeg', 0.9);
+
+  document.getElementById('modalCrop').classList.remove('open');
+  if (cropperInstance) {
+    cropperInstance.destroy();
+    cropperInstance = null;
+  }
+}
+
+// Logo upload form submission (sends cropped 1:1 blob)
 async function handleLogoUpload(e) {
   e.preventDefault();
-  const fileInput = document.getElementById('logoFileInput');
-  const file = fileInput.files[0];
-  if (!file) return;
+  if (!croppedBlob) {
+    Swal.fire({ icon: 'warning', title: 'Belum Dipotong', text: 'Silakan pilih dan potong gambar terlebih dahulu.', confirmButtonColor: '#ef4444' });
+    return;
+  }
 
   loader.show();
   const formData = new FormData();
-  formData.append('logo', file);
+  // Upload blob renamed as bina.jpg to match bucket config
+  formData.append('logo', croppedBlob, 'bina.jpg');
 
   try {
     const res = await fetch('/api/admin/settings/logo', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`
-        // Do not set Content-Type header; fetch handles boundaries for multipart/form-data automatically
       },
       body: formData
     });
@@ -790,6 +921,9 @@ async function handleLogoUpload(e) {
     if (!res.ok) throw new Error(data.error || 'Gagal mengunggah logo');
 
     Swal.fire({ icon: 'success', title: 'Berhasil', text: 'Logo perusahaan berhasil diperbarui!', timer: 1500, showConfirmButton: false });
+
+    // Clear croppedBlob after successful upload
+    croppedBlob = null;
     loadSettingsData();
   } catch (error) {
     Swal.fire({ icon: 'error', title: 'Upload Gagal', text: error.message, confirmButtonColor: '#ef4444' });
@@ -849,7 +983,7 @@ function exportExcel() {
     // Get unique list of questions
     const questionHeaders = [];
     const questionIds = [];
-    
+
     // Scan respondents answers to collect questions headers
     respondentsData.forEach(resp => {
       resp.answers.forEach(ans => {
@@ -861,7 +995,7 @@ function exportExcel() {
     });
 
     const worksheetData = [];
-    
+
     // Add file headers
     const excelHeaders = ['ID', 'Waktu Masuk', 'Nama Responden', 'Departemen', 'Status Anonim', 'Total Skor', 'Persentase', 'Predikat', ...questionHeaders];
     worksheetData.push(excelHeaders);
@@ -879,10 +1013,14 @@ function exportExcel() {
         resp.predicate
       ];
 
-      // Add rating score matching questionIds order
+      // Add rating score or text matching questionIds order
       questionIds.forEach(qId => {
         const answer = resp.answers.find(ans => ans.question_id === qId);
-        row.push(answer ? answer.rating_value : '-');
+        if (answer) {
+          row.push(answer.question_type === 'text' ? (answer.text_value || '') : answer.rating_value);
+        } else {
+          row.push('-');
+        }
       });
 
       worksheetData.push(row);
@@ -892,11 +1030,11 @@ function exportExcel() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(worksheetData);
     XLSX.utils.book_append_sheet(wb, ws, "Hasil Survey CSS");
-    
+
     // Download
-    const filename = `PT_BINA_Survey_CSS_${new Date().toISOString().slice(0,10)}.xlsx`;
+    const filename = `PT_BINA_Survey_CSS_${new Date().toISOString().slice(0, 10)}.xlsx`;
     XLSX.writeFile(wb, filename);
-    
+
     Swal.fire({ icon: 'success', title: 'Berhasil Ekspor', text: 'File Excel berhasil diunduh.', timer: 1500, showConfirmButton: false });
   } catch (error) {
     console.error('Excel Export Error:', error);
@@ -910,7 +1048,7 @@ function exportPDF() {
 
   // Create clean printable view
   const element = document.getElementById('pdfReportContent');
-  
+
   // Update PDF only layout banner
   const pdfHeader = document.getElementById('pdfHeaderBrand');
   pdfHeader.style.display = 'block';
@@ -959,11 +1097,11 @@ function exportPDF() {
   pdfHeader.appendChild(dateInfo);
 
   const opt = {
-    margin:       [0.5, 0.5, 0.5, 0.5],
-    filename:     `Laporan_PT_BINA_Survey_CSS_${new Date().toISOString().slice(0,10)}.pdf`,
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true },
-    jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
+    margin: [0.5, 0.5, 0.5, 0.5],
+    filename: `Laporan_PT_BINA_Survey_CSS_${new Date().toISOString().slice(0, 10)}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
   };
 
   // Run generation

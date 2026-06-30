@@ -1,44 +1,50 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Login - PT. BINA CSS</title>
-  
+  <title>Admin Login - PT. BINA</title>
+
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  
+
   <!-- SweetAlert2 -->
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  
+
   <!-- Shared Style + Local Adjustments -->
   <link rel="stylesheet" href="/css/style.css">
-  
+
   <style>
     body {
       justify-content: center;
       align-items: center;
       padding: 1rem;
     }
+
     .login-container {
       width: 100%;
       max-width: 420px;
       animation: scaleUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+
     .login-header {
       text-align: center;
       margin-bottom: 2rem;
     }
+
     .login-header i {
       color: var(--color-primary);
       margin-bottom: 1rem;
     }
+
     .login-title {
       font-family: var(--font-display);
       font-size: 1.75rem;
       font-weight: 800;
       color: var(--color-primary-dark);
     }
+
     .login-subtitle {
       font-size: 0.875rem;
       color: var(--color-text-muted);
@@ -46,6 +52,7 @@
     }
   </style>
 </head>
+
 <body>
 
   <!-- Loading Animation -->
@@ -63,13 +70,15 @@
     <form id="loginForm" onsubmit="handleLogin(event)">
       <div class="form-group">
         <label for="username"><i class="fa-solid fa-user"></i> Username</label>
-        <input type="text" id="username" class="form-control" placeholder="Masukkan username" required autocomplete="username">
+        <input type="text" id="username" class="form-control" placeholder="Masukkan username" required
+          autocomplete="username">
       </div>
       <div class="form-group" style="margin-bottom: 2rem;">
         <label for="password"><i class="fa-solid fa-lock"></i> Password</label>
-        <input type="password" id="password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password">
+        <input type="password" id="password" class="form-control" placeholder="Masukkan password" required
+          autocomplete="current-password">
       </div>
-      
+
       <button type="submit" class="btn">
         Masuk <i class="fa-solid fa-right-to-bracket"></i>
       </button>
@@ -77,6 +86,32 @@
   </div>
 
   <script>
+    // Favicon updater helper with cache-busting timestamp support
+    function updateFavicon(logoUrl) {
+      if (!logoUrl) return;
+      const urlWithBuster = logoUrl.includes('?t=') ? logoUrl : `${logoUrl}?t=${Date.now()}`;
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = urlWithBuster;
+      if (logoUrl.endsWith('.svg') || logoUrl.includes('.svg?')) link.type = 'image/svg+xml';
+      else if (logoUrl.endsWith('.png') || logoUrl.includes('.png?')) link.type = 'image/png';
+      else link.type = 'image/jpeg';
+    }
+
+    // Load configuration at startup for favicon/branding
+    fetch('/api/survey/config')
+      .then(res => res.json())
+      .then(config => {
+        if (config.logo_path) {
+          updateFavicon(config.logo_path);
+        }
+      })
+      .catch(err => console.error('Failed to load branding favicon:', err));
+
     // Redirect if already logged in
     if (localStorage.getItem('adminToken')) {
       window.location.href = '/admin/dashboard.html';
@@ -104,7 +139,7 @@
         });
 
         const data = await res.json();
-        
+
         if (!res.ok) {
           throw new Error(data.error || 'Login gagal.');
         }
@@ -137,4 +172,5 @@
     }
   </script>
 </body>
+
 </html>

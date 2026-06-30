@@ -61,6 +61,7 @@ async function setup() {
         id SERIAL PRIMARY KEY,
         category_id INT NOT NULL,
         question_text TEXT NOT NULL,
+        question_type VARCHAR(100) DEFAULT 'star',
         is_active SMALLINT DEFAULT 1,
         sort_order INT DEFAULT 0,
         weight INT DEFAULT 1,
@@ -86,7 +87,8 @@ async function setup() {
         id SERIAL PRIMARY KEY,
         respondent_id INT NOT NULL,
         question_id INT NOT NULL,
-        rating_value INT NOT NULL,
+        rating_value INT NULL,
+        text_value TEXT NULL,
         FOREIGN KEY (respondent_id) REFERENCES respondents(id) ON DELETE CASCADE,
         FOREIGN KEY (question_id) REFERENCES survey_questions(id) ON DELETE CASCADE
       );
@@ -103,6 +105,14 @@ async function setup() {
         FOREIGN KEY (respondent_id) REFERENCES respondents(id) ON DELETE CASCADE
       );
     `);
+
+    // Create Indexes for query optimization
+    console.log('Creating database indexes...');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_survey_answers_respondent_id ON survey_answers(respondent_id);');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_survey_answers_question_id ON survey_answers(question_id);');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_survey_questions_category_id ON survey_questions(category_id);');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_respondents_submitted_at ON respondents(submitted_at);');
+    console.log('Database indexes created successfully.');
 
     console.log('Tables initialized successfully.');
 

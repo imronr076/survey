@@ -1,4 +1,8 @@
 /* Admin Dashboard Layout styling */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --sidebar-width: 260px;
   --header-height: 70px;
