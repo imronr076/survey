@@ -330,11 +330,60 @@ function populateRespondentsTable(respondents) {
           <button type="button" class="btn-action btn-action-view" onclick="viewRespondentDetail(${resp.id})" title="Lihat Detail Tanggapan">
             <i class="fa-solid fa-eye"></i>
           </button>
+          <button type="button" class="btn-action btn-action-delete" onclick="deleteRespondent(${resp.id})" title="Hapus Tanggapan" style="background-color: var(--color-danger); color: white;">
+            <i class="fa-solid fa-trash"></i>
+          </button>
         </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// Delete a respondent response
+async function deleteRespondent(id) {
+  const result = await Swal.fire({
+    title: 'Apakah Anda yakin?',
+    text: 'Tanggapan responden ini akan dihapus secara permanen dari sistem!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Ya, hapus!',
+    cancelButtonText: 'Batal'
+  });
+
+  if (!result.isConfirmed) return;
+
+  loader.show();
+  try {
+    const res = await fetch(`/api/admin/respondents/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Gagal menghapus tanggapan');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Berhasil',
+      text: 'Tanggapan responden berhasil dihapus.',
+      timer: 1500,
+      showConfirmButton: false
+    });
+
+    loadDashboardData();
+  } catch (error) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: error.message,
+      confirmButtonColor: '#ef4444'
+    });
+  } finally {
+    loader.hide();
+  }
 }
 
 // Open detail scorecard for a respondent

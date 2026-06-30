@@ -462,6 +462,18 @@ app.get('/api/admin/respondents', authenticateToken, async (req, res) => {
   }
 });
 
+// Delete a respondent and their survey responses
+app.delete('/api/admin/respondents/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  try {
+    await pool.query('DELETE FROM respondents WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Tanggapan responden berhasil dihapus' });
+  } catch (error) {
+    console.error('Error deleting respondent:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // ==========================================
 // 4. SECURE CATEGORY CRUD
