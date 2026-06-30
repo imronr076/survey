@@ -47,6 +47,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--font-body);
   background-color: #f1f5f9;
@@ -55,7 +60,6 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow-x: clip;
   position: relative;
 }
 
