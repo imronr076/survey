@@ -6,9 +6,9 @@ const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || '5432'),
   user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'defaultdb',
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined
+  password: process.env.DB_PASS || 'postgres',
+  database: process.env.DB_NAME || 'bina-survey',
+  ssl: process.env.DB_SSL === 'false' ? { rejectUnauthorized: false } : undefined
 };
 
 async function setup() {
