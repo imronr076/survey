@@ -775,9 +775,10 @@ async function loadSettingsData() {
     document.getElementById('settingShowIdentity').checked = config.show_identity !== '0';
 
     const logoPreview = document.getElementById('logoPreviewContainer');
-    if (config.logo_path) {
-      logoPreview.innerHTML = `<img src="${config.logo_path}" alt="PT. BINA Logo">`;
-      updateFavicon(config.logo_path);
+    if (config.logo_path && config.logo_path.trim() !== '') {
+      const logoWithBuster = `${config.logo_path}?t=${Date.now()}`;
+      logoPreview.innerHTML = `<img src="${logoWithBuster}" alt="PT. BINA Logo">`;
+      updateFavicon(logoWithBuster);
     } else {
       logoPreview.innerHTML = '<span style="color: var(--color-text-muted); font-size: 0.85rem;"><i class="fa-solid fa-images fa-lg"></i> No Logo Uploaded</span>';
     }

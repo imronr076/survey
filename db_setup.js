@@ -130,7 +130,7 @@ async function setup() {
     for (const setting of defaultSettings) {
       await client.query(
         `INSERT INTO settings (setting_key, setting_value) VALUES ($1, $2) 
-         ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = CURRENT_TIMESTAMP`,
+         ON CONFLICT (setting_key) DO NOTHING`,
         [setting.key, setting.value]
       );
     }
