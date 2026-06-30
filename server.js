@@ -645,7 +645,17 @@ async function uploadToS3(fileBuffer, mimetype) {
   const SECRET_KEY = "cf8eff575be3d9245908cf72f8e844db76f604fd9742852c36fcaee34b59d3df";
   const BUCKET = "bina";
   const ENDPOINT = "cdn.api57.web.id";
-  const FILE_KEY = `logo/bina_${Date.now()}.jpg`;
+
+  // Determine file extension based on mimetype
+  let ext = 'jpg';
+  if (mimetype === 'image/png') {
+    ext = 'png';
+  } else if (mimetype === 'image/svg+xml') {
+    ext = 'svg';
+  } else if (mimetype === 'image/gif') {
+    ext = 'gif';
+  }
+  const FILE_KEY = `logo/bina_${Date.now()}.${ext}`;
   const REGION = "garage";
   const SERVICE = "s3";
 

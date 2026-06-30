@@ -930,13 +930,13 @@ function applyCrop() {
   });
 
   const logoPreview = document.getElementById('logoPreviewContainer');
-  logoPreview.innerHTML = `<img src="${canvas.toDataURL('image/jpeg')}" alt="Preview Logo">`;
+  logoPreview.innerHTML = `<img src="${canvas.toDataURL('image/png')}" alt="Preview Logo">`;
 
   document.getElementById('btnSaveLogo').disabled = false;
 
   canvas.toBlob((blob) => {
     croppedBlob = blob;
-  }, 'image/jpeg', 0.9);
+  }, 'image/png');
 
   document.getElementById('modalCrop').classList.remove('open');
   if (cropperInstance) {
@@ -955,8 +955,8 @@ async function handleLogoUpload(e) {
 
   loader.show();
   const formData = new FormData();
-  // Upload blob renamed as bina.jpg to match bucket config
-  formData.append('logo', croppedBlob, 'bina.jpg');
+  // Upload blob renamed as bina.png to match bucket config
+  formData.append('logo', croppedBlob, 'bina.png');
 
   try {
     const res = await fetch('/api/admin/settings/logo', {
