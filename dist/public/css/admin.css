@@ -8,6 +8,11 @@
   --header-height: 70px;
 }
 
+html, body.admin-body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body.admin-body {
   background-color: #f1f5f9;
   display: flex;

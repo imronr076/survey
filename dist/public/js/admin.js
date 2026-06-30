@@ -330,11 +330,60 @@ function populateRespondentsTable(respondents) {
           <button type="button" class="btn-action btn-action-view" onclick="viewRespondentDetail(${resp.id})" title="Lihat Detail Tanggapan">
             <i class="fa-solid fa-eye"></i>
           </button>
+          <button type="button" class="btn-action btn-action-delete" onclick="deleteRespondent(${resp.id})" title="Hapus Tanggapan" style="background-color: var(--color-danger); color: white;">
+            <i class="fa-solid fa-trash"></i>
+          </button>
         </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// Delete a respondent response
+async function deleteRespondent(id) {
+  const result = await Swal.fire({
+    title: 'Apakah Anda yakin?',
+    text: 'Tanggapan responden ini akan dihapus secara permanen dari sistem!',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Ya, hapus!',
+    cancelButtonText: 'Batal'
+  });
+
+  if (!result.isConfirmed) return;
+
+  loader.show();
+  try {
+    const res = await fetch(`/api/admin/respondents/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders()
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Gagal menghapus tanggapan');
+
+    Swal.fire({
+      icon: 'success',
+      title: 'Berhasil',
+      text: 'Tanggapan responden berhasil dihapus.',
+      timer: 1500,
+      showConfirmButton: false
+    });
+
+    loadDashboardData();
+  } catch (error) {
+    Swal.fire({
+      icon: 'error',
+      title: 'Gagal',
+      text: error.message,
+      confirmButtonColor: '#ef4444'
+    });
+  } finally {
+    loader.hide();
+  }
 }
 
 // Open detail scorecard for a respondent
@@ -775,9 +824,10 @@ async function loadSettingsData() {
     document.getElementById('settingShowIdentity').checked = config.show_identity !== '0';
 
     const logoPreview = document.getElementById('logoPreviewContainer');
-    if (config.logo_path) {
-      logoPreview.innerHTML = `<img src="${config.logo_path}" alt="PT. BINA Logo">`;
-      updateFavicon(config.logo_path);
+    if (config.logo_path && config.logo_path.trim() !== '') {
+      const logoWithBuster = `${config.logo_path}?t=${Date.now()}`;
+      logoPreview.innerHTML = `<img src="${logoWithBuster}" alt="PT. BINA Logo">`;
+      updateFavicon(logoWithBuster);
     } else {
       logoPreview.innerHTML = '<span style="color: var(--color-text-muted); font-size: 0.85rem;"><i class="fa-solid fa-images fa-lg"></i> No Logo Uploaded</span>';
     }
@@ -880,13 +930,13 @@ function applyCrop() {
   });
 
   const logoPreview = document.getElementById('logoPreviewContainer');
-  logoPreview.innerHTML = `<img src="${canvas.toDataURL('image/jpeg')}" alt="Preview Logo">`;
+  logoPreview.innerHTML = `<img src="${canvas.toDataURL('image/png')}" alt="Preview Logo">`;
 
   document.getElementById('btnSaveLogo').disabled = false;
 
   canvas.toBlob((blob) => {
     croppedBlob = blob;
-  }, 'image/jpeg', 0.9);
+  }, 'image/png');
 
   document.getElementById('modalCrop').classList.remove('open');
   if (cropperInstance) {
@@ -905,8 +955,8 @@ async function handleLogoUpload(e) {
 
   loader.show();
   const formData = new FormData();
-  // Upload blob renamed as bina.jpg to match bucket config
-  formData.append('logo', croppedBlob, 'bina.jpg');
+  // Upload blob renamed as bina.png to match bucket config
+  formData.append('logo', croppedBlob, 'bina.png');
 
   try {
     const res = await fetch('/api/admin/settings/logo', {

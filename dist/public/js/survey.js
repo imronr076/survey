@@ -50,7 +50,7 @@ async function initSurvey() {
     if (configData.welcome_text) {
       document.getElementById('welcomeText').textContent = configData.welcome_text;
     }
-    if (configData.logo_path) {
+    if (configData.logo_path && configData.logo_path.trim() !== '') {
       const logoWithBuster = `${configData.logo_path}?t=${Date.now()}`;
       document.getElementById('surveyLogoContainer').innerHTML = `
         <img src="${logoWithBuster}" alt="PT. BINA Logo" class="brand-logo">
