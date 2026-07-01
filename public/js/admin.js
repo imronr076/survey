@@ -165,6 +165,18 @@ async function loadDashboardData() {
     const satisfactionIndex = (stats.overallSatisfaction / 20).toFixed(2);
     document.getElementById('statSatisfactionIndex').textContent = `${satisfactionIndex} / 5.0`;
 
+    // Update Rating Summary Card above charts
+    const ratingScoreLargeEl = document.getElementById('ratingScoreLarge');
+    const ratingScoreTextEl = document.getElementById('ratingScoreText');
+    const ratingStarsInnerEl = document.getElementById('ratingStarsInner');
+    
+    if (ratingScoreLargeEl) ratingScoreLargeEl.textContent = satisfactionIndex;
+    if (ratingScoreTextEl) ratingScoreTextEl.textContent = satisfactionIndex;
+    if (ratingStarsInnerEl) {
+      const starPercentage = (satisfactionIndex / 5) * 100;
+      ratingStarsInnerEl.style.width = `${starPercentage}%`;
+    }
+
     // 2. Get charts data
     const chartsUrl = `/api/admin/charts?startDate=${startDate}&endDate=${endDate}`;
     const chartsRes = await fetch(chartsUrl, { headers: getHeaders() });

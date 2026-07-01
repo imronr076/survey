@@ -741,3 +741,90 @@ input:checked + .slider-toggle:before {
     height: 320px;
   }
 }
+
+/* Rating Summary Card (Playstore Style) */
+.rating-summary-card {
+  background-color: #ffffff;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.rating-summary-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--color-primary-dark);
+  margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+}
+
+.rating-score-large {
+  font-family: var(--font-display);
+  font-size: 4rem;
+  font-weight: 800;
+  color: var(--color-primary-dark);
+  line-height: 1;
+  margin-bottom: 0.75rem;
+}
+
+.stars-outer {
+  position: relative;
+  display: inline-block;
+  font-size: 2.75rem;
+  color: var(--color-star-empty);
+  letter-spacing: 4px;
+  line-height: 1;
+}
+
+.stars-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  width: 0%; /* Updates dynamically */
+  color: var(--color-star-filled);
+  letter-spacing: 4px;
+  line-height: 1;
+}
+
+.rating-summary-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-top: 1rem;
+}
+
+@media (max-width: 576px) {
+  .rating-summary-card {
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+  
+  .rating-score-large {
+    font-size: 3rem;
+  }
+  
+  .stars-outer {
+    font-size: 2rem;
+    letter-spacing: 2px;
+  }
+
+  .stars-inner {
+    letter-spacing: 2px;
+  }
+  
+  .rating-summary-label {
+    font-size: 0.85rem;
+  }
+}
+
